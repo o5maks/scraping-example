@@ -1,58 +1,54 @@
-import urllib
 import urllib.error
 import urllib.request
 import csv
-import asyncio
 from bs4 import BeautifulSoup
+from pathlib import Path
 
 class Scraper:
-    def __init__(self, file_name) -> None:
-        self.csv_file = 'infos.csv'
+    def __init__(self, file_name: str) -> None:
+        self.csv_file = Path(file_name)
         self.base_url = 'http://books.toscrape.com/catalogue/'
         self.url = 'http://books.toscrape.com/catalogue/page-1.html'
-        with open(file_name, 'w', -1, 'utf8') as file:
+        self.csv_file.write_text('', encoding='utf8')
+        with self.csv_file.open('w', newline='', encoding='utf8') as file:
             writer = csv.writer(file)
             writer.writerow(['Title', 'Price', 'Asset'])
 
-    def run(self):
+    def run(self) -> None:
         response = self.collect()
         if response is None:
             return
         
-        global parsed
         parsed = BeautifulSoup(response, 'html.parser')
-        self.parse()
-        self.next()
+        self.parse(parsed)
+        self.next(parsed)
 
-    def collect(self) -> None | str:
+    def collect(self) -> None | bytes:
         try:
             with urllib.request.urlopen(self.url) as response:
                 return response.read()
         except (urllib.error.URLError, urllib.error.HTTPError):
             return None
     
-    def parse(self):
-        global parsed
-        with open(self.csv_file, 'a', newline='', encoding='utf8') as file:
+    def parse(self, parsed: BeautifulSoup) -> None:
+        with self.csv_file.open('a', newline='', encoding='utf8') as file:
             writer = csv.writer(file)
             articles = parsed.find_all('article', class_='product_pod')
             for article in articles:
                 title = article.h3.a['title']
-                image = f'http://books.toscrape.com/{article.find("a").img["src"]}'
+                image = f"http://books.toscrape.com/{article.find('a').img['src']}"
                 price = article.find('p', class_='price_color').text
                 writer.writerow([title, price, image])
 
-    def next(self):
-        global parsed
+    def next(self, parsed: BeautifulSoup) -> None:
         button = parsed.find('li', class_='next')
-        url = button.a['href'] if button else None
-
-        if url:
-            self.url = self.base_url + url
+        if button and button.a:
+            self.url = self.base_url + button.a['href']
             self.run()
 
-async def main():
+def main() -> None:
     scraper = Scraper('infos.csv')
     scraper.run()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    main()
